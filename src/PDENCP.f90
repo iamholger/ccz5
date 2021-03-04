@@ -1,7 +1,7 @@
-subroutine PDENCP(dummy, dummyout) 
+subroutine PDENCP(BgradQ, Q, gradQin) 
     !USE ISO_C_BINDING
 !$omp declare target
-   use matrix3
+   !use matrix3
    IMPLICIT NONE
    ! 11. Oct 21:40: This was a matrix BGradQ(nVar, nDim) but is a vector in spaceTimePredictorNonlinear
 #if defined(Dim3)
@@ -12,22 +12,47 @@ subroutine PDENCP(dummy, dummyout)
     INTEGER, PARAMETER :: nVar = 59                           ! The number of variables of the PDE system 
     INTEGER, PARAMETER :: nParam=0
     INTEGER, PARAMETER :: d=3
-    integer, intent(in):: dummy
-    INTEGER, intent(out):: dummyout
 
-
-
-   REAL :: BgradQ(nVar)
-   REAL :: gradQin(nVar, 3)
-   REAL :: Q(nVar)
+   REAL, intent(out) :: BgradQ(nVar)
+   REAL, intent(in) :: gradQin(nVar, 3)
+   REAL, intent(in) :: Q(nVar)
   TYPE, bind(C) :: tEquations
       REAL(8)    :: gamma, Pi, c0, g = 9.81, friction = 1.0     
-      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f, CCZ4g, CCZ4xi, CCZ4e, CCZ4c, CCZ4mu, CCZ4ds, CCZ4sk, CCZ4bs  
+      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f=0.0, CCZ4g, CCZ4xi=0.0, CCZ4e=1, CCZ4c=1.0, CCZ4mu=0.2, CCZ4ds=1.0, CCZ4sk=0.0, CCZ4bs=0.0  
       REAL(8)    :: CCZ4GLMc0 = 0.5, CCZ4GLMc = 0.75, CCZ4GLMd = 0.75, CCZ4GLMepsD = 1e-2, CCZ4GLMepsA = 1e-2, CCZ4GLMepsP = 1e-2, cs, alpha, beta, lambda, cv, rho0, p0, tau1, tau2, mu, kappa ,tau 
-      INTEGER :: CCZ4LapseType, EinsteinAutoAux = 0, ReferenceDepth = 1.0    
+      INTEGER :: CCZ4LapseType=0, EinsteinAutoAux = 0, ReferenceDepth = 1.0    
       REAL(8)    :: DivCleaning_a = 1.0 
   END TYPE tEquations
   TYPE(tEquations) :: EQN
+
+  ! Set parameters here according to Properties, case GaugeWave
+  !EQN%CCZ4GLMc0   = 1.5   ! 0.1      
+  !EQN%CCZ4GLMc    = 1.2   ! 2.0    
+  !EQN%CCZ4GLMd    = 2.0   ! 1.0     
+  !EQN%CCZ4GLMepsA = 1.0   ! 5. 
+  !EQN%CCZ4GLMepsP = 1.0   ! 5.  
+  !EQN%CCZ4GLMepsD = 1.0   ! 0.1 
+  !!
+  !EQN%CCZ4itau  = 1.0 
+
+  !EQN%CCZ4k1  = 0.0  !modified according to the version in ExaHyPE 1
+  !EQN%CCZ4k2  = 0.0 
+  !EQN%CCZ4k3  = 0.0 
+  !EQN%CCZ4eta = 0.0 
+  !EQN%CCZ4f   = 0.0 
+  !EQN%CCZ4g   = 0.0 
+  !EQN%CCZ4xi  = 0.0 
+  !EQN%CCZ4e   = 1.0 
+  !EQN%CCZ4c   = 1.0 
+  !EQN%CCZ4mu  = 0.2 
+  !EQN%CCZ4ds  = 1.0 
+  !EQN%CCZ4sk  = 0.0
+  !EQN%CCZ4bs   = 0.0      ! set bs=1 if you want to activate the shift convection for beta, b and B (standard CCZ4 formulation). set it to bs=0 to switch off shift convection for those quantities 
+  !EQN%CCZ4LapseType   = 0 ! harmonic lapse 
+  !EQN%EinsteinAutoAux = 0 
+
+
+
 
    
    REAL  :: gradQ(nVar, 3)
@@ -118,7 +143,9 @@ subroutine PDENCP(dummy, dummyout)
     g_cov(3,2) = Q(5)
     g_cov(3,3) = Q(6)
     ! This determinant should be close to unity, since we use the conformal decomposition 
-    det = 1./(Q(1)*Q(4)*Q(6)-Q(1)*Q(5)**2-Q(2)**2*Q(6)+2*Q(2)*Q(3)*Q(5)-Q(3)**2*Q(4)) 
+    ! NEED to ensure that this is not 0
+    det = 1./(Q(1)*Q(4)*Q(6)-Q(1)*Q(5)**2-Q(2)**2*Q(6)+2*Q(2)*Q(3)*Q(5)-Q(3)**2*Q(4))  ! HS inverse det really
+    !print*,"DET",det
     
     g_contr(1,1) =  ( g_cov(2,2)*g_cov(3,3)-g_cov(2,3)*g_cov(3,2)) 
     g_contr(1,2) = -( g_cov(1,2)*g_cov(3,3)-g_cov(1,3)*g_cov(3,2))
@@ -133,6 +160,7 @@ subroutine PDENCP(dummy, dummyout)
     g_contr = g_contr * det
 
     alpha = EXP(MAX(-20.,MIN(20.,Q(17))))  
+    !print*,"alpha2",alpha*alpha
     SELECT CASE(EQN%CCZ4LapseType) 
     CASE(0)  ! harmonic 
         fa = 1.0 
@@ -154,8 +182,10 @@ subroutine PDENCP(dummy, dummyout)
     Aex(3,1) = Q(9) 
     Aex(3,2) = Q(11) 
     Aex(3,3) = Q(12) 
+    !print*,"Aex",Aex
     !
-    traceA = SUM(g_contr*Aex) 
+    traceA = SUM(g_contr*Aex)
+    !print*,"traceA",traceA
     Aex = Aex - 1./3.*g_cov*traceA 
     !
     dAex(:,1,1) = gradQ(7,:) 
@@ -169,7 +199,7 @@ subroutine PDENCP(dummy, dummyout)
     dAex(:,3,3) = gradQ(12,:) 
     !
     Amix = matmul(g_contr, Aex)
-    Aup  = matmul(g_contr, mytranspose(Amix)) 
+    Aup  = matmul(g_contr, transpose(Amix)) 
     !
     Theta = Q(13)
     dTheta = gradQ(13,:) 
@@ -185,12 +215,14 @@ subroutine PDENCP(dummy, dummyout)
     dAA(:,1) = gradQ(24,:) 
     dAA(:,2) = gradQ(25,:) 
     dAA(:,3) = gradQ(26,:) 
+    !print*,"dAA",dAA
     !
     traceK = Q(54) 
     dtraceK = gradQ(54,:) 
     !
     phi   = EXP(MAX(-20.,MIN(20.,Q(55))))
     phi2 =  phi*phi
+    !print*,"phi2",phi2
 
     PP    = Q(56:58) 
     dPP(:,1) = gradQ(56,:) 
@@ -198,6 +230,7 @@ subroutine PDENCP(dummy, dummyout)
     dPP(:,3) = gradQ(58,:) 
     !
     beta = (/ Q(18), Q(19), Q(20) /) 
+    !print*,"beta",beta
     BB(1,1) = Q(27) 
     BB(2,1) = Q(28) 
     BB(3,1) = Q(29) 
@@ -277,6 +310,9 @@ subroutine PDENCP(dummy, dummyout)
     dDD(:,3,3,1)=gradQ(50,:) 
     dDD(:,3,3,2)=gradQ(52,:) 
     dDD(:,3,3,3)=gradQ(53,:)
+
+
+
     !
     dgup = 0.0 
     DO k = 1, 3 
@@ -293,7 +329,7 @@ subroutine PDENCP(dummy, dummyout)
     !
     Kex  = Aex/phi2 + 1./3.*traceK*g_cov/phi2 
     Kmix = matmul( phi2*g_contr, Kex  ) 
-    Kup  = matmul( phi2*g_contr, mytranspose(Kmix)) 
+    Kup  = matmul( phi2*g_contr, transpose(Kmix)) 
     !
     Christoffel_tilde = 0.0  
     Christoffel       = 0.0 
@@ -317,10 +353,10 @@ subroutine PDENCP(dummy, dummyout)
       ENDDO
      ENDDO     
     ENDDO   
-    Z   = 0.5*mymatvec( g_cov, Ghat - Gtilde ) 
-    Zup = mymatvec(phi2*g_contr, Z) 
+    Z   = 0.5*matmul( g_cov, Ghat - Gtilde ) 
+    Zup = matmul(phi2*g_contr, Z)
     !
-    ! 
+    !print*,"SUMDD",sum(dDD) 
     !
     DO i = 1, 3 
      DO ip = 1, 3 
@@ -359,9 +395,15 @@ subroutine PDENCP(dummy, dummyout)
          RicciNCP(m,n) = RicciNCP(m,n) + RiemannNCP(m,l,n,l)  
       ENDDO
      ENDDO
-    ENDDO    
+    ENDDO
+    !print*,"RicciNCP",RicciNCP
+    !DO i = 1, 3 
+     !DO k = 1, 3
+     !print*,i,k,RicciNCP(i,k)
+     !enddo
+     !enddo
     !
-    RNCP = phi2*SUM(g_contr*RicciNCP) 
+    RNCP = phi2*SUM(g_contr*RicciNCP)
     !
     dGtildeNCP = 0.0
     !
@@ -376,7 +418,23 @@ subroutine PDENCP(dummy, dummyout)
        ENDDO
       ENDDO
      ENDDO
-    ENDDO    
+    ENDDO
+
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"dGhat",i,j,dGhat(i,j)
+     !ENDDO
+    !ENDDO
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"dGtildeNCP",i,j,dGtildeNCP(i,j)
+     !ENDDO
+    !ENDDO
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"g_cov",i,j,g_cov(i,j)
+     !ENDDO
+    !ENDDO
     !
     dZNCP = 0.0
     DO j = 1, 3 
@@ -385,7 +443,13 @@ subroutine PDENCP(dummy, dummyout)
         dZNCP(k,i) = dZNCP(k,i) + ds*0.5*g_cov(i,j)*(dGhat(k,j)-dGtildeNCP(k,j))  
        ENDDO 
       ENDDO 
-    ENDDO     
+    ENDDO
+    !print*,"dZNCP",dZNCP    
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"dZNCP",i,j,dZNCP(i,j)
+     !ENDDO
+    !ENDDO
     !
     DO j = 1, 3 
      DO i = 1, 3 
@@ -393,7 +457,13 @@ subroutine PDENCP(dummy, dummyout)
      ENDDO
     ENDDO    
     !
-    RicciPlusNablaZNCP = RicciNCP + ( nablaZNCP + mytranspose(nablaZNCP) ) 
+    RicciPlusNablaZNCP = RicciNCP + ( nablaZNCP + transpose(nablaZNCP) ) 
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"RicciPlusNableZNCP",i,j,RicciPlusNablaZNCP(i,j)
+     !ENDDO
+    !ENDDO
+    !print*,"RicciPlusNablaZNCP",RicciPlusNablaZNCP
     !
     RPlusTwoNablaZNCP = phi2*SUM(g_contr*RicciPlusNablaZNCP) 
     !
@@ -403,10 +473,19 @@ subroutine PDENCP(dummy, dummyout)
        nablaijalphaNCP(i,j) = alpha*0.5*( dAA(i,j)+dAA(j,i) ) 
      ENDDO
     ENDDO 
-    nablanablaalphaNCP = phi2*SUM( g_contr*nablaijalphaNCP ) 
+    nablanablaalphaNCP = phi2*SUM( g_contr*nablaijalphaNCP )
+    !!print*,"nablanablaalphaNCP",nablanablaalphaNCP
+    !print*,"nablaijalphaNCP",nablaijalphaNCP
+    !DO i = 1, 3 
+    !DO j = 1, 3 
+    !print*,"nablaijalphaNCP",i,j,nablaijalphaNCP(i,j)
+     !ENDDO
+    !ENDDO
     !
     SecondOrderTermsNCP = -nablaijalphaNCP + alpha*RicciPlusNablaZNCP 
-    traceNCP = SUM( g_contr*SecondOrderTermsNCP ) 
+    !print*,"SecondOrderTermsNCP",SecondOrderTermsNCP
+    traceNCP = SUM( g_contr*SecondOrderTermsNCP )
+    !print*,"traceNCP",traceNCP
     SecondOrderTermsNCP = SecondOrderTermsNCP - 1./3.*g_cov*traceNCP 
     !
     ! Now assemble all this terrible stuff... 
@@ -417,13 +496,20 @@ subroutine PDENCP(dummy, dummyout)
     dtK = phi2*SecondOrderTermsNCP + beta(1)*dAex(1,:,:) + beta(2)*dAex(2,:,:) + beta(3)*dAex(3,:,:)      ! extrinsic curvature
     !
     dtTraceK = -nablanablaalphaNCP + alpha*RPlusTwoNablaZNCP + SUM(beta(:)*dtraceK(:)) 
+    !!print*,"dtTraceK",dtTraceK
     !
     traceB = BB(1,1) + BB(2,2) + BB(3,3) 
+    !print*,"traceB",traceB
     dtphi   = 0.0 
     dtalpha = 0.0 
 
+    !print*,"dTheta",dTheta
+    !print*,"beta",beta
+    !print*,"alpha",alpha,"e",e
+
     Aupdown = SUM(Aex*Aup) 
     dtTheta = 0.5*alpha*e**2*( RplusTwoNablaZNCP ) + beta(1)*dTheta(1) + beta(2)*dTheta(2) + beta(3)*dTheta(3)        ! *** original cleaning *** 
+    !print*,"dtTheta",dtTheta
     !
     divAupNCP = 0.0
     DO i = 1, 3
@@ -449,22 +535,26 @@ subroutine PDENCP(dummy, dummyout)
              dtGhat(i) = dtGhat(i) + g_contr(k,l)*0.5*(dBB(k,l,i)+dBB(l,k,i)) + 1./3*g_contr(i,k)*0.5*(dBB(k,l,l)+dBB(l,k,l)) 
          ENDDO
         ENDDO         
-    ENDDO 
+    ENDDO
+    
     DO k = 1, 3 
         ov(k) = 2*alpha*( SUM(g_contr(:,:)*dAex(k,:,:)) )           ! here we can use the constraint that trace A tilde = 0. 
     ENDDO
-    dtGhat = dtGhat + sk*mymatvec(g_contr,ov)                         ! Ghat is an "up" vector, so we need to multiply with g_contr 
+    dtGhat = dtGhat + sk*matmul(g_contr,ov)                         ! Ghat is an "up" vector, so we need to multiply with g_contr 
     !
     dtbb = xi*dtGhat + bs*( beta(1)*gradQ(21:23,1) + beta(2)*gradQ(21:23,2) + beta(3)*gradQ(21:23,3) - beta(1)*gradQ(14:16,1) - beta(2)*gradQ(14:16,2) - beta(3)*gradQ(14:16,3) ) 
     dtbb = sk*dtbb  
     !
     dtbeta  = 0.0    
     !
-    ! Auxiliary variables 
-    dtA = -alpha*fa*( dtraceK(:) -dK0(:) - c*2*dTheta(:) ) + beta(1)*dAA(1,:) + beta(2)*dAA(2,:) + beta(3)*dAA(3,:)  
+    ! Auxiliary variables
+    !print*,"dtK",dtraceK,"dK0",dK0,"dTh",dTheta
+    dtA = -alpha*fa*( dtraceK(:) -dK0(:) - c*2*dTheta(:) ) + beta(1)*dAA(1,:) + beta(2)*dAA(2,:) + beta(3)*dAA(3,:)
+    !print*,"AAAA",dtA
     DO k = 1, 3 
         dtA(k) = dtA(k) - sk*alpha*fa*( SUM(g_contr(:,:)*dAex(k,:,:)) )   ! here we can use the constraint that trace A tilde = 0. 
     ENDDO
+    !print*,"AAAA'",dtA
     !
     ! We have removed the conservative fluxes for CCZ4, so put all the stuff into the NCP and FusedNCP 
     dtB(:,1) = fff*gradQ(21,:)  
@@ -530,13 +620,22 @@ subroutine PDENCP(dummy, dummyout)
     BgradQ(59:nVar) = 0.0  
     !
     BgradQ = -BgradQ ! change sign, since we work on the left hand side in PDENCP 
-    dummyout = BgradQ(3) ! HS: I only do this to prevent the compiler from optimizing the function call away
 #endif
 END subroutine PDENCP
 
 program main
-    do i= 1,10000000
-        call PDENCP(i,j)
-        k=k+j
-    enddo
+  implicit none
+  REAL :: BgradQ(59), gradQin(59,3), Q(59), dummy(4,2)
+  integer :: i,j,k,l,m
+  BgradQ = 1
+
+  gradQin =0
+  gradQin(:,1)=1
+
+  ! The initial data for Q is chosen such that we do not divide by 0 in the inverse determinant
+  Q=1
+  Q(1)=2
+  Q(2)=3
+  call PDENCP(BgradQ, Q, gradQin)
+  print*, BgradQ
 end program main

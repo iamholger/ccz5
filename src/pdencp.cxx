@@ -2,35 +2,9 @@
 #include <iostream>
 
 
-      //REAL(8)    :: gamma, Pi, c0, g = 9.81, friction = 1.0     
-      //REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f, CCZ4g, CCZ4xi, CCZ4e, CCZ4c, CCZ4mu, CCZ4ds, CCZ4sk, CCZ4bs  
-      //REAL(8)    :: CCZ4GLMc0 = 0.5, CCZ4GLMc = 0.75, CCZ4GLMd = 0.75, CCZ4GLMepsD = 1e-2, CCZ4GLMepsA = 1e-2, CCZ4GLMepsP = 1e-2, cs, alpha, beta, lambda, cv, rho0, p0, tau1, tau2, mu, kappa ,tau 
-      //INTEGER :: CCZ4LapseType, EinsteinAutoAux = 0, ReferenceDepth = 1.0    
-      //REAL(8)    :: DivCleaning_a = 1.0 
-
-inline void matmul()
-{
-    double A[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    double B[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    double C[3][3] = {0};
-    
-    for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++)
-    for (int u = 0; u < 3; u++) C[i][j] += A[i][u] * B[j][u];
-
-    for (int i = 0; i < 3; i++) {
-        for (int j = 0; j < 3; j++) {
-            std::cout << C[i][j] << ".";
-        }
-        std::cout << "\n";
-    }
-
-}
-
-
 
 #pragma omp declare target
-void pdencp(int& ii)
+void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSerialised, const int normal)
 {
 #if defined(Dim3)
     constexpr int nDim = 3;
@@ -39,31 +13,48 @@ void pdencp(int& ii)
 #endif
     constexpr int nVar(59), nParam(0), d(3);
 
-    double gradQin[59][3];
-    double Q[59];
-    
-    double BgradQ[59] = {0};
+    // Input and output variables
+    double gradQin[59][3] ={0};
 
-    double Qx[59], Qy[59], Qz[59];
+    // De-serialise input data and fill static array
+    // FIXME the use of 2D arrays can be avoided: all terms not in the normal are 0
+    for (int i=0; i<nVar; i++) gradQin[i][normal] = gradQSerialised[i+normal*nVar];
+
 
     // Note g_cov is symmetric
     const double g_cov[3][3] = { {Q[0], Q[1], Q[2]}, {Q[1], Q[3], Q[4]}, {Q[2], Q[4], Q[5]} };
-    const double invdet = 1./( Q[0]*Q[3]*Q[5] - Q[0]*Q[4]*Q[4] - Q[1]*Q[1]*Q[5] + 2*Q[1]*Q[2]*Q[4] -Q[2]*Q[2]*Q[3]); 
+    const double invdet = 1./( Q[0]*Q[3]*Q[5] - Q[0]*Q[4]*Q[4] - Q[1]*Q[1]*Q[5] + 2*Q[1]*Q[2]*Q[4] -Q[2]*Q[2]*Q[3]);
+    //std::cout << "INVDET " << invdet << "\n";
 
     const double g_contr[3][3] = {
         { ( Q[3]*Q[5]-Q[4]*Q[4])*invdet, -( Q[1]*Q[5]-Q[2]*Q[4])*invdet, -(-Q[1]*Q[4]+Q[2]*Q[3])*invdet},
         {-( Q[1]*Q[5]-Q[4]*Q[2])*invdet,  ( Q[0]*Q[5]-Q[2]*Q[2])*invdet, -( Q[0]*Q[4]-Q[2]*Q[1])*invdet},
         {-(-Q[1]*Q[4]+Q[3]*Q[2])*invdet, -( Q[0]*Q[4]-Q[1]*Q[2])*invdet,  ( Q[0]*Q[3]-Q[1]*Q[1])*invdet}
     };
+    //std::cout << "g_contr\n";
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << " " << g_contr[i][j];
+      //std::cout << "\n";
+    //}
+    //std::cout << "\n";
 
 
     // NOTE Aex is symmetric
     double Aex[3][3] = { {Q[6], Q[7], Q[8]}, {Q[7], Q[9], Q[10]}, {Q[8], Q[10], Q[11]} };
+    //std::cout << "Aex\n";
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << " " << Aex[i][j];
+      //std::cout << "\n";
+    //}
+    //std::cout << "\n";
 
     double traceA = 0;
     for (int i=0;i<3;i++)
     for (int j=0;j<3;j++) traceA+=g_contr[i][j]*Aex[i][j];
     traceA *= 1./3;
+    //std::cout << "traceA " <<3*traceA << "\n";
     
     for (int i=0;i<3;i++)
     for (int j=0;j<3;j++) Aex[i][j] -= traceA * g_cov[i][j];
@@ -118,6 +109,7 @@ void pdencp(int& ii)
     const double phi = std::exp(std::fmax(-20., std::fmin(20.,Q[54])));
     const double phi2 = phi*phi;
 
+    //std::cout << "phi2 " << phi2 << "\n";
 
     double Z[3] = {0};
     for (int i=0;i<3;i++)
@@ -127,47 +119,47 @@ void pdencp(int& ii)
     for (int j=0;j<3;j++) Zup[i] += phi2 * g_contr[i][j] * Z[j];
 
 
-    
     const double dDD[3][3][3][3] = { 
         {
             {
-                {gradQin[35][0],gradQin[35][1],gradQin[35][2]}, {gradQin[36][0],gradQin[36][1],gradQin[36][2]}, {gradQin[37][0],gradQin[37][1], gradQin[37][2]},
+                {gradQin[35][0],gradQin[36][0],gradQin[37][0]}, {gradQin[36][0],gradQin[38][0],gradQin[39][0]}, {gradQin[37][0],gradQin[39][0],gradQin[40][0]},
             },
             {
-                {gradQin[36][0],gradQin[36][1],gradQin[36][2]}, {gradQin[38][0],gradQin[38][1],gradQin[38][2]}, {gradQin[39][0],gradQin[39][1], gradQin[39][2]},
+                {gradQin[41][0],gradQin[42][0],gradQin[43][0]}, {gradQin[42][0],gradQin[44][0],gradQin[45][0]}, {gradQin[43][0],gradQin[45][0],gradQin[46][0]},
             },
             {
-                {gradQin[37][0],gradQin[37][1],gradQin[37][2]}, {gradQin[39][0],gradQin[39][1],gradQin[39][2]}, {gradQin[40][0],gradQin[40][1], gradQin[40][2]}
+                {gradQin[47][0],gradQin[48][0],gradQin[49][0]}, {gradQin[48][0],gradQin[50][0],gradQin[51][0]}, {gradQin[49][0],gradQin[51][0],gradQin[52][0]}
             }
         },
         {
             {
-                {gradQin[41][0],gradQin[41][1],gradQin[41][2]}, {gradQin[42][0],gradQin[42][1],gradQin[42][2]}, {gradQin[43][0],gradQin[43][1], gradQin[43][2]},
+                {gradQin[35][1],gradQin[36][1],gradQin[37][1]}, {gradQin[36][1],gradQin[38][1],gradQin[39][1]}, {gradQin[37][1],gradQin[39][1],gradQin[40][1]},
             },
             {
-                {gradQin[42][0],gradQin[42][1],gradQin[42][2]}, {gradQin[44][0],gradQin[44][1],gradQin[44][2]}, {gradQin[45][0],gradQin[45][1], gradQin[45][2]},
+                {gradQin[41][1],gradQin[42][1],gradQin[43][1]}, {gradQin[42][1],gradQin[44][1],gradQin[45][1]}, {gradQin[43][1],gradQin[45][1],gradQin[46][1]},
             },
             {
-                {gradQin[43][0],gradQin[43][1],gradQin[43][2]}, {gradQin[45][0],gradQin[45][1],gradQin[45][2]}, {gradQin[46][0],gradQin[46][1], gradQin[46][2]}
+                {gradQin[47][1],gradQin[48][1],gradQin[49][1]}, {gradQin[48][1],gradQin[50][1],gradQin[51][1]}, {gradQin[49][1],gradQin[51][1],gradQin[52][1]}
             }
         },
         {
             {
-                {gradQin[47][0],gradQin[47][1],gradQin[47][2]}, {gradQin[48][0],gradQin[48][1],gradQin[48][2]}, {gradQin[49][0],gradQin[49][1], gradQin[49][2]},
+                {gradQin[35][2],gradQin[36][2],gradQin[37][2]}, {gradQin[36][2],gradQin[38][2],gradQin[39][2]}, {gradQin[37][2],gradQin[39][2],gradQin[40][2]},
             },
             {
-                {gradQin[48][0],gradQin[48][1],gradQin[48][2]}, {gradQin[50][0],gradQin[50][1],gradQin[50][2]}, {gradQin[51][0],gradQin[51][1], gradQin[51][2]},
-            }, 
+                {gradQin[41][2],gradQin[42][2],gradQin[43][2]}, {gradQin[42][2],gradQin[44][2],gradQin[45][2]}, {gradQin[43][2],gradQin[45][2],gradQin[46][2]},
+            },
             {
-                {gradQin[49][0],gradQin[49][1],gradQin[49][2]}, {gradQin[51][0],gradQin[51][1],gradQin[51][2]}, {gradQin[52][0],gradQin[52][1], gradQin[52][2]}
+                {gradQin[47][2],gradQin[48][2],gradQin[49][2]}, {gradQin[48][2],gradQin[50][2],gradQin[51][2]}, {gradQin[49][2],gradQin[51][2],gradQin[52][2]}
             }
         }
-    }; 
+    };
+
 
     const double dPP[3][3] = {
-        {gradQin[55][0],gradQin[55][1],gradQin[55][2]},
-        {gradQin[56][0],gradQin[56][1],gradQin[56][2]},
-        {gradQin[57][0],gradQin[57][1],gradQin[57][2]}
+        {gradQin[55][0],gradQin[56][0],gradQin[57][0]},
+        {gradQin[55][1],gradQin[56][1],gradQin[57][1]},
+        {gradQin[55][2],gradQin[56][2],gradQin[57][2]}
     };
 
 
@@ -189,10 +181,11 @@ void pdencp(int& ii)
 
 
 
-            dChristoffel_tildeNCP[k][i][ip][m] += 0.5*g_contr[m][l]*(dDD[k][i][ip][l] + dDD[i][k][ip][l] + dDD[k][ip][i][l] + dDD[ip][k][i][l] - dDD[k][l][i][ip] + dDD[l][k][i][ip]);
+            dChristoffel_tildeNCP[k][i][ip][m] += 0.5*g_contr[m][l]*(dDD[k][i][ip][l] + dDD[i][k][ip][l] + dDD[k][ip][i][l] + dDD[ip][k][i][l] - dDD[k][l][i][ip] - dDD[l][k][i][ip]);
             
         }
     }
+
 
     double RiemannNCP[3][3][3][3] = {0};
     for (int i = 0; i < 3; i++)
@@ -211,26 +204,69 @@ void pdencp(int& ii)
     for (int j = 0; j < 3; j++)
     for (int l = 0; l < 3; l++) dGtildeNCP[k][i] += g_contr[j][l]*dChristoffel_tildeNCP[k][j][l][i];
 
-
+    //std::cout << "dGtildeNCP\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << dGtildeNCP[i][j] << "\n";
+      ////std::cout << "\n";
+    //}
+    //std::cout << "g_cov\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << g_cov[i][j] << "\n";
+      ////std::cout << "\n";
+    //}
     
     const double dGhat[3][3] = {
-        {gradQin[13][0],gradQin[13][1],gradQin[13][2]},
-        {gradQin[14][0],gradQin[14][1],gradQin[14][2]},
-        {gradQin[15][0],gradQin[15][0],gradQin[15][2]}
+        {gradQin[13][0],gradQin[14][0],gradQin[15][0]},
+        {gradQin[13][1],gradQin[14][1],gradQin[15][1]},
+        {gradQin[13][2],gradQin[14][2],gradQin[15][2]}
     };
+    //std::cout << "dGhat\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << dGhat[i][j] << "\n";
+      ////std::cout << "\n";
+    //}
 
+    //std::cout << "\n";
+    //std::cout << "g_cov\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << " " << g_cov[i][j];
+      //std::cout << "\n";
+    //}
+    //std::cout << "\n";
 
+    //std::cout << "RicciNCP\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << RicciNCP[i][j] << "\n";
+    //}
 
     // First model parameter ds here (ds == CCZ4ds)
     const double ds = 1.0; // NOTE this param seems to always be 1
+    //BUG?
     double dZNCP[3][3] = {0};
     for (int j = 0; j < 3; j++)
     for (int i = 0; i < 3; i++)
     for (int k = 0; k < 3; k++) dZNCP[k][i] += ds*0.5*g_cov[i][j]*(dGhat[k][j]-dGtildeNCP[k][j]);  
+    
+    //std::cout << "dZNCP\n";
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << dZNCP[i][j] << "\n";
+    //}
 
+    // !BUG!
     double RicciPlusNablaZNCP[3][3];
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) RicciNCP[i][j] = dZNCP[i][j] + dZNCP[j][i];
+    for (int j = 0; j < 3; j++) RicciPlusNablaZNCP[i][j] = RicciNCP[i][j] + dZNCP[i][j] + dZNCP[j][i];
+    //std::cout << "RicciPlusNablaZNCP\n"; // Checked!
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << " " << i+1 << " " << j+1 << " " << RicciPlusNablaZNCP[i][j] <<"\n";
+    //}
 
     double RPlusTwoNablaZNCP = 0; 
     for (int i = 0; i < 3; i++)
@@ -243,10 +279,17 @@ void pdencp(int& ii)
 
     const double AA[3] = {Q[23], Q[24], Q[25]};
     const double dAA[3][3] = {
-        {gradQin[23][0],gradQin[23][1],gradQin[23][2]},
-        {gradQin[24][0],gradQin[24][1],gradQin[24][2]},
-        {gradQin[25][0],gradQin[25][0],gradQin[25][2]}
+        {gradQin[23][0],gradQin[24][0],gradQin[25][0]},
+        {gradQin[23][1],gradQin[24][1],gradQin[25][1]},
+        {gradQin[23][2],gradQin[24][2],gradQin[25][2]}
     };
+    //std::cout << "dAA\n";
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << " " << dAA[i][j];
+      //std::cout << "\n";
+    //}
+    //std::cout << "\n";
 
     double nablaijalphaNCP[3][3];
     for (int i = 0; i < 3; i++)
@@ -256,25 +299,36 @@ void pdencp(int& ii)
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++) nablanablaalphaNCP += g_contr[i][j]*nablaijalphaNCP[i][j]; 
     nablanablaalphaNCP*=phi2;
+    //std::cout << "nablanablaalphaNCP " << nablanablaalphaNCP << "\n";
    
     double SecondOrderTermsNCP[3][3];
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)  SecondOrderTermsNCP[i][j] = -nablaijalphaNCP[i][j] + alpha*RicciPlusNablaZNCP[i][j];
     
+    //std::cout << "nablaijalphaNCP\n";
+    //for (int i=0;i<3;i++)
+    //{
+      //for (int j=0;j<3;j++) std::cout << i+1 << " " <<j+1<<" " << nablaijalphaNCP[i][j] << "\n";
+    //}
+    
     double traceNCP = 0;
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++) traceNCP += g_contr[i][j]*SecondOrderTermsNCP[i][j];
+    //std::cout << "traceNCP " << traceNCP << "\n";
     
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)  SecondOrderTermsNCP[i][j] -= 1./3 * traceNCP * g_cov[i][j];
         
 
     const double beta[3] = {Q[17], Q[18], Q[19]};
-    
+    //std::cerr << "beta " << beta[0] << " " << beta[1] << " " << beta[2] << "\n"; 
+
+
+    // checked!
     const double dAex[3][3][3] = { 
-        {{gradQin[6][0], gradQin[6][1], gradQin[6][2]}, {gradQin[7][0], gradQin[7][1], gradQin[7][2]}, {gradQin[8][0], gradQin[8][1], gradQin[8][2]}},
-        {{gradQin[7][0], gradQin[7][1], gradQin[7][2]}, {gradQin[9][0], gradQin[9][1], gradQin[9][2]}, {gradQin[10][0], gradQin[10][1], gradQin[10][2]}},
-        {{gradQin[8][0], gradQin[8][1], gradQin[8][2]}, {gradQin[10][0], gradQin[10][1], gradQin[10][2]}, {gradQin[11][0], gradQin[11][1], gradQin[11][2]}}
+        {{gradQin[6][0],gradQin[7][0],gradQin[8][0]}, {gradQin[7][0], gradQin[9][0], gradQin[10][0]},  {gradQin[8][0], gradQin[10][0], gradQin[11][0]}},
+        {{gradQin[6][1],gradQin[7][1],gradQin[8][1]}, {gradQin[7][1], gradQin[9][1], gradQin[10][1]},  {gradQin[8][1], gradQin[10][1], gradQin[11][1]}},
+        {{gradQin[6][2],gradQin[7][2],gradQin[8][2]}, {gradQin[7][2], gradQin[9][2], gradQin[10][2]},  {gradQin[8][2], gradQin[10][2], gradQin[11][2]}}
     };
     //! Now assemble all this terrible stuff... 
     //!
@@ -287,12 +341,17 @@ void pdencp(int& ii)
 
     double dtTraceK = -nablanablaalphaNCP + alpha*RPlusTwoNablaZNCP + beta[0]*dtraceK[0] + beta[1]*dtraceK[1] + beta[2]*dtraceK[2];
 
+    //std::cout << "dtTraceK: " << dtTraceK << "\n";
+
+
+
     const double BB[3][3] = {
         {Q[26], Q[27], Q[28]}, {Q[29], Q[30], Q[31]}, {Q[32], Q[33], Q[34]}
     };
 
     double traceB = BB[0][0] + BB[1][1] + BB[2][2]; // TODO direct from Q! 
 
+    //std::cout << "traceB " << traceB << "\n";
 
     double Aupdown = 0;
     for (int i = 0; i < 3; i++)
@@ -303,8 +362,11 @@ void pdencp(int& ii)
     const double e = 1.0; 
     const double e2 = e*e;
     const double dTheta[3] = {gradQin[13][0],gradQin[13][1],gradQin[13][2]};
+    //std::cout << "dTheta: " << dTheta[0] << " " << dTheta[1] << " " << dTheta[2] << "\n"; 
+    //std::cout << "beta: " << beta[0] << " " << beta[1] << " " << beta[2] << "\n"; 
     const double dtTheta = 0.5*alpha*e2*( RPlusTwoNablaZNCP ) + beta[0]*dTheta[0] + beta[1]*dTheta[1] + beta[2]*dTheta[2]; // *** original cleaning *** 
-   
+  
+    //std::cout << "dtTheta: " << dtTheta << "\n"; 
 
     double divAupNCP[3] = {0};
 
@@ -314,14 +376,14 @@ void pdencp(int& ii)
     for (int k = 0; k < 3; k++) divAupNCP[i] += g_contr[i][l]*g_contr[j][k]*dAex[j][l][k];
 
 
-    double Mom[3];
-    for (int i = 0; i < 3; i++)
-    {
-        Mom[i] = divAupNCP[i];
-        double temp=0;
-        for (int j = 0; j < 3; j++) temp +=g_contr[i][j]*dtraceK[j];
-        Mom[i] -= 2./3*temp;
-    }
+    //double Mom[3];
+    //for (int i = 0; i < 3; i++)
+    //{
+        //Mom[i] = divAupNCP[i];
+        //double temp=0;
+        //for (int j = 0; j < 3; j++) temp +=g_contr[i][j]*dtraceK[j];
+        //Mom[i] -= 2./3*temp;
+    //}
 
 
 
@@ -331,16 +393,26 @@ void pdencp(int& ii)
 
     const double dBB[3][3][3] = {
         {
-            {sk*gradQin[26][0],sk*gradQin[26][1],sk*gradQin[26][2]}, {sk*gradQin[27][0],sk*gradQin[27][1],sk*gradQin[27][2]}, {sk*gradQin[28][0],sk*gradQin[28][1],sk*gradQin[28][2]}
+            {sk*gradQin[26][0],sk*gradQin[27][0],sk*gradQin[28][0]}, {sk*gradQin[29][0],sk*gradQin[30][0],sk*gradQin[31][0]}, {sk*gradQin[32][0],sk*gradQin[33][0],sk*gradQin[34][0]}
         },
         {
-            {sk*gradQin[29][0],sk*gradQin[29][1],sk*gradQin[29][2]}, {sk*gradQin[30][0],sk*gradQin[30][1],sk*gradQin[30][2]}, {sk*gradQin[31][0],sk*gradQin[31][1],sk*gradQin[31][2]},
+            {sk*gradQin[26][1],sk*gradQin[27][1],sk*gradQin[28][1]}, {sk*gradQin[29][1],sk*gradQin[30][1],sk*gradQin[31][1]}, {sk*gradQin[32][1],sk*gradQin[33][1],sk*gradQin[34][1]}
         },
         {
-            {sk*gradQin[32][0],sk*gradQin[32][1],sk*gradQin[32][2]}, {sk*gradQin[33][0],sk*gradQin[33][1],sk*gradQin[33][2]}, {sk*gradQin[34][0],sk*gradQin[34][1],sk*gradQin[34][2]}
+            {sk*gradQin[26][2],sk*gradQin[27][2],sk*gradQin[28][2]}, {sk*gradQin[29][2],sk*gradQin[30][2],sk*gradQin[31][2]}, {sk*gradQin[32][2],sk*gradQin[33][2],sk*gradQin[34][2]}
         }
     };
 
+    //DO i = 1, 3
+        //dtGhat(i) = - 4./3.*alpha*SUM(g_contr(i,:)*dtraceK(:))     &  
+                    //+ 2.0*alpha*SUM( g_contr(:,i)*( dTheta(:)  ) ) &                    
+                    //+ beta(1)*dGhat(1,i) + beta(2)*dGhat(2,i) + beta(3)*dGhat(3,i) 
+        //DO l = 1, 3
+         //DO k = 1, 3
+             //dtGhat(i) = dtGhat(i) + g_contr(k,l)*0.5*(dBB(k,l,i)+dBB(l,k,i)) + 1./3*g_contr(i,k)*0.5*(dBB(k,l,l)+dBB(l,k,l)) 
+         //ENDDO
+        //ENDDO         
+    //ENDDO
 
     double dtGhat[3];
     for (int i = 0; i < 3; i++)
@@ -351,7 +423,7 @@ void pdencp(int& ii)
             temp  +=g_contr[i][j]*dtraceK[j];
             temp2 +=g_contr[j][i]*dTheta[j];
         }
-        dtGhat[i] = -4./3.*alpha*temp + 2*alpha*temp2 + beta[0]*dGhat[0][i] + beta[1]*dGhat[1][i] + beta[1]*dGhat[1][i];
+        dtGhat[i] = -4./3.*alpha*temp + 2*alpha*temp2 + beta[0]*dGhat[0][i] + beta[1]*dGhat[1][i] + beta[2]*dGhat[2][i];
         for (int l = 0; l < 3; l++)
         for (int k = 0; k < 3; k++) dtGhat[i] += g_contr[k][l]*0.5*(dBB[k][l][i] + dBB[l][k][i]) + 1./3.*g_contr[i][k]*0.5*(dBB[k][l][l] + dBB[l][k][l]);
     }
@@ -365,11 +437,15 @@ void pdencp(int& ii)
         for (int j = 0; j < 3; j++) temp += g_contr[i][j]*dAex[k][i][j];
         ov[k] = 2*alpha*temp;
     }
+    //std::cout << "ov: " << ov[0] << " " <<ov[1] << " " << ov[2]<<"\n";
 
     // TODO check this for sk non-zero
     // matrix vector multiplication in a loop and add result to existing vector
+    // checked for sk=0
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) dtGhat[i] += g_contr[i][j]*ov[j];
+    for (int j = 0; j < 3; j++) dtGhat[i] += g_contr[i][j]*ov[i];
+    
+    //for (int i = 0; i < 3; i++) std::cout << "dtGhat " << i+1 << " " << dtGhat[i] << "\n";
 
     double dtbb[3];
     // Params CCZ4xi, CCZ4bs
@@ -389,14 +465,16 @@ void pdencp(int& ii)
 
     // Auxiliary variables 
     double dtA[3];
-    double dK0[3] = {0};
+    double dK0[3] = {0}; // FIXME we just add 0 all the time???
     for (int i = 0; i < 3; i++)
     {
         dtA[i] = -alpha*fa*(dtraceK[i] - dK0[i] - c*2*dTheta[i]) + beta[0]*dAA[0][i] + beta[1]*dAA[1][i] + beta[2]*dAA[2][i];
     }
+    //for (int i = 0; i < 3; i++) std::cout << "dtA " << i+1 << " " << dtA[i] << "\n";
 
+    //dtA = -alpha*fa*( dtraceK(:) -dK0(:) - c*2*dTheta(:) ) + beta(1)*dAA(1,:) + beta(2)*dAA(2,:) + beta(3)*dAA(3,:)
 
-    // TODO check correctness for non zero params
+    // TODO check correctness for non zero params (CCZ4%sk)
     for (int k = 0; k < 3; k++)
     {
         double temp=0;
@@ -436,19 +514,27 @@ void pdencp(int& ii)
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++) dtD[i][j][k] = -alpha*dAex[i][j][k];
     
+    
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++)
     for (int m = 0; m < 3; m++)
     {
-        dtD[i][j][k] += ( 0.125*(g_cov[m][i]*(dBB[k][j][m] + dBB[j][k][m]) + g_cov[m][j]*(dBB[k][i][m]+dBB[i][k][m])) - 1./6.*g_cov[i][j]*(dBB[k][m][m]+dBB[m][k][m]) );
+        dtD[k][i][j] += ( 0.125*(g_cov[m][i]*(dBB[k][j][m] + dBB[j][k][m]) + g_cov[m][j]*(dBB[k][i][m]+dBB[i][k][m])) - 1./6.*g_cov[i][j]*(dBB[k][m][m]+dBB[m][k][m]) );
         for (int n = 0; n < 3; n++)
-            dtD[i][j][k] += 1./3*alpha*g_cov[i][j]*g_contr[n][m]*dAex[k][n][m]; // explicitly remove the trace of tilde A again  
+            dtD[k][i][j] += 1./3*alpha*g_cov[i][j]*g_contr[n][m]*dAex[k][n][m]; // explicitly remove the trace of tilde A again  
     }
 
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++) dtD[i][j][k] += beta[0]*dDD[0][i][j][k] + beta[1]*dDD[1][i][j][k] + beta[2]*dDD[2][i][j][k];
+    
+    //for (int i = 0; i < 3; i++)
+    //for (int j = 0; j < 3; j++)
+    //for (int k = 0; k < 3; k++) 
+    //{
+      //std::cout << "dtD " << i+1 << " " << j+1 << " "  << k+1 << " " << dtD[i][j][k] << "\n";
+    //}
 
 
     double dtP[3];
@@ -469,6 +555,7 @@ void pdencp(int& ii)
     double dtgamma[3][3] = {0};
     double dtalpha = 0;
     double dtbeta[3] = {0};
+    double dtphi = 0;
 
     BgradQ[0]  = -dtgamma[0][0];
     BgradQ[1]  = -dtgamma[0][1];
@@ -481,14 +568,14 @@ void pdencp(int& ii)
     BgradQ[8]  = -dtK[0][2];
     BgradQ[9]  = -dtK[1][1];
     BgradQ[10] = -dtK[1][2];
-    BgradQ[11] = -dtK[2][2];
-    BgradQ[12] = -dtTheta;
+    BgradQ[11] = -dtK[2][2]; // ok
+    BgradQ[12] = -dtTheta;   // ok
     for (int i = 0; i < 3; i++) BgradQ[13+i] = -dtGhat[i];
     BgradQ[16] = -dtalpha;
     for (int i = 0; i < 3; i++) BgradQ[17+i] = -dtbeta[i];
     for (int i = 0; i < 3; i++) BgradQ[20+i] = -dtbb[i];
     for (int i = 0; i < 3; i++) BgradQ[23+i] = -dtA[i];
-    BgradQ[26] = -dtB[0][0];
+    BgradQ[26] = -dtB[0][0]; // note: thes are all 0 for default sk=0
     BgradQ[27] = -dtB[1][0];
     BgradQ[28] = -dtB[2][0];
     BgradQ[29] = -dtB[0][1];
@@ -516,20 +603,37 @@ void pdencp(int& ii)
     BgradQ[51] = -dtD[2][1][2];
     BgradQ[52] = -dtD[2][2][2];
     BgradQ[53] = -dtTraceK;
+    BgradQ[54] = -dtphi;
     for (int i = 0; i < 3; i++) BgradQ[55+i] = -dtP[i];
-
+    BgradQ[58] = 0;
 
     // Output data
-    ii++;
     
 }
 #pragma omp end declare target
 
 int main()
 {
-//#pragma omp target teams distribute parallel for
-    for (int i=0;i<10000000;)
-    pdencp(i);
-    matmul();
-    return 0;
+  const int nVar(59);
+  double gradQSerialised[nVar*3], BgradQ[nVar]={2}, Q[nVar]={4};
+
+  // Set up initial test data
+  for (int i=0;i<nVar;i++)
+  {
+    Q[i] = 1;
+    BgradQ[i] = 1;
+    gradQSerialised[i]=1;
+    gradQSerialised[i +nVar]=1;
+    gradQSerialised[i +nVar + nVar]=1;
+  }
+   //The initial data for Q is chosen such that we do not divide by 0 in the inverse determinant
+  Q[0]=2;
+  Q[1]=3;
+
+  pdencp_(BgradQ, Q, gradQSerialised, 0);
+
+  for (int i=0;i<nVar;i++) std::cout << BgradQ[i] << " ";
+  std::cout << "\n";
+  return 0;
+
 }
