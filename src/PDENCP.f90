@@ -18,7 +18,7 @@ subroutine PDENCP(BgradQ, Q, gradQin)
    REAL, intent(in) :: Q(nVar)
   TYPE, bind(C) :: tEquations
       REAL(8)    :: gamma, Pi, c0, g = 9.81, friction = 1.0     
-      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f=0.0, CCZ4g, CCZ4xi=0.0, CCZ4e=1, CCZ4c=1.0, CCZ4mu=0.2, CCZ4ds=1.0, CCZ4sk=0.0, CCZ4bs=0.0  
+      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f=0.0, CCZ4g, CCZ4xi=0.0, CCZ4e=1, CCZ4c=1.0, CCZ4mu=0.2, CCZ4ds=1.0, CCZ4sk=0.1, CCZ4bs=0.0  
       REAL(8)    :: CCZ4GLMc0 = 0.5, CCZ4GLMc = 0.75, CCZ4GLMd = 0.75, CCZ4GLMepsD = 1e-2, CCZ4GLMepsA = 1e-2, CCZ4GLMepsP = 1e-2, cs, alpha, beta, lambda, cv, rho0, p0, tau1, tau2, mu, kappa ,tau 
       INTEGER :: CCZ4LapseType=0, EinsteinAutoAux = 0, ReferenceDepth = 1.0    
       REAL(8)    :: DivCleaning_a = 1.0 
@@ -540,7 +540,9 @@ subroutine PDENCP(BgradQ, Q, gradQin)
     DO k = 1, 3 
         ov(k) = 2*alpha*( SUM(g_contr(:,:)*dAex(k,:,:)) )           ! here we can use the constraint that trace A tilde = 0. 
     ENDDO
+    !print*,"ov",ov
     dtGhat = dtGhat + sk*matmul(g_contr,ov)                         ! Ghat is an "up" vector, so we need to multiply with g_contr 
+    !print*,"dtGhat",dtGhat
     !
     dtbb = xi*dtGhat + bs*( beta(1)*gradQ(21:23,1) + beta(2)*gradQ(21:23,2) + beta(3)*gradQ(21:23,3) - beta(1)*gradQ(14:16,1) - beta(2)*gradQ(14:16,2) - beta(3)*gradQ(14:16,3) ) 
     dtbb = sk*dtbb  
@@ -636,6 +638,13 @@ program main
   Q=1
   Q(1)=2
   Q(2)=3
-  call PDENCP(BgradQ, Q, gradQin)
-  print*, BgradQ
+
+  !do i=1,1000000
+    call PDENCP(BgradQ, Q, gradQin)
+  !enddo
+  do i=1,59
+    print*,i,BgradQ(i)
+  enddo
+  !call PDENCP(BgradQ, Q, gradQin)
+  !print*, BgradQ
 end program main

@@ -13,7 +13,25 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
 #endif
     constexpr int nVar(59), nParam(0), d(3);
 
+    // First model parameter ds here (ds == CCZ4ds)
+    const double ds = 1.0; // NOTE this param seems to always be 1
+    // Second model parameter CCZ4e
+    const double e = 1.0; 
+    const double e2 = e*e;
+    // Parameter CCZ4sk here
+    // TODO test for values that from 0 to check logic
+    const double sk=0.1;
     // Input and output variables
+    // Params CCZ4xi, CCZ4bs
+    const double xi=0.0;
+    const double bs=0.0;
+    // CCZ4 parameeter -- harmonic lapse CCZ4c
+    const double c   = 1.0;
+    // Param CCZ4fff, CCZ4mu
+    const double fff = 0;
+    const double mu  = 0.2;
+    const double fa  = 1.0;
+    const double faa = 1.0;
     double gradQin[59][3] ={0};
 
     // De-serialise input data and fill static array
@@ -244,8 +262,6 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
       //for (int j=0;j<3;j++) std::cout << i+1 << " " << j+1 << " " << RicciNCP[i][j] << "\n";
     //}
 
-    // First model parameter ds here (ds == CCZ4ds)
-    const double ds = 1.0; // NOTE this param seems to always be 1
     //BUG?
     double dZNCP[3][3] = {0};
     for (int j = 0; j < 3; j++)
@@ -358,9 +374,6 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     for (int j = 0; j < 3; j++) Aupdown += Aex[i][j]*Aup[i][j];  
 
   
-    // Second model parameter CCZ4e
-    const double e = 1.0; 
-    const double e2 = e*e;
     const double dTheta[3] = {gradQin[13][0],gradQin[13][1],gradQin[13][2]};
     //std::cout << "dTheta: " << dTheta[0] << " " << dTheta[1] << " " << dTheta[2] << "\n"; 
     //std::cout << "beta: " << beta[0] << " " << beta[1] << " " << beta[2] << "\n"; 
@@ -387,9 +400,6 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
 
 
 
-    // Parameter CCZ4sk here
-    // TODO test for values that from 0 to check logic
-    const double sk=0.0;
 
     const double dBB[3][3][3] = {
         {
@@ -443,14 +453,11 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     // matrix vector multiplication in a loop and add result to existing vector
     // checked for sk=0
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) dtGhat[i] += g_contr[i][j]*ov[i];
+    for (int j = 0; j < 3; j++) dtGhat[i] += sk*g_contr[i][j]*ov[j];
     
     //for (int i = 0; i < 3; i++) std::cout << "dtGhat " << i+1 << " " << dtGhat[i] << "\n";
 
     double dtbb[3];
-    // Params CCZ4xi, CCZ4bs
-    const double xi=0.0;
-    const double bs=0.0;
     for (int i = 0; i < 3; i++)
     {
         dtbb[i] = xi*dtGhat[i] + bs * ( beta[0]*gradQin[20+i][0] + beta[1]*gradQin[20+i][1] + beta[2]*gradQin[20+i][2] - beta[0]*gradQin[13+i][0] - beta[1]*gradQin[13+i][1] - beta[2]*gradQin[13+i][2]);
@@ -458,10 +465,6 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
 
     }
 
-    // CCZ4 parameeter -- harmonic lapse CCZ4c
-    const double c   = 1.0;
-    const double fa  = 1.0;
-    const double faa = 1.0;
 
     // Auxiliary variables 
     double dtA[3];
@@ -483,9 +486,6 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
         dtA[k] -= sk*alpha*fa*temp;
     }
 
-    // Param CCZ4fff, CCZ4mu
-    const double fff = 0;
-    const double mu = 0.2;
     double dtB[3][3] = {
         {fff*gradQin[20][0],fff*gradQin[20][1],fff*gradQin[20][2]},
         {fff*gradQin[21][0],fff*gradQin[21][1],fff*gradQin[21][2]},
@@ -570,7 +570,7 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     BgradQ[10] = -dtK[1][2];
     BgradQ[11] = -dtK[2][2]; // ok
     BgradQ[12] = -dtTheta;   // ok
-    for (int i = 0; i < 3; i++) BgradQ[13+i] = -dtGhat[i];
+    for (int i = 0; i < 3; i++) BgradQ[13+i] = -dtGhat[i]; // buggy
     BgradQ[16] = -dtalpha;
     for (int i = 0; i < 3; i++) BgradQ[17+i] = -dtbeta[i];
     for (int i = 0; i < 3; i++) BgradQ[20+i] = -dtbb[i];
@@ -630,10 +630,10 @@ int main()
   Q[0]=2;
   Q[1]=3;
 
-  pdencp_(BgradQ, Q, gradQSerialised, 0);
+  /*for (int i=0;i<1000000;i++) */pdencp_(BgradQ, Q, gradQSerialised, 0);
+  //pdencp_(BgradQ, Q, gradQSerialised, 0);
 
-  for (int i=0;i<nVar;i++) std::cout << BgradQ[i] << " ";
-  std::cout << "\n";
+  for (int i=0;i<nVar;i++) std::cout << i+1 << " "  << BgradQ[i] << "\n";
   return 0;
 
 }
