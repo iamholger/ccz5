@@ -23,12 +23,12 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     const double sk=0.1;
     // Input and output variables
     // Params CCZ4xi, CCZ4bs
-    const double xi=0.0;
-    const double bs=0.0;
+    const double xi=0.1;
+    const double bs=0.1;
     // CCZ4 parameeter -- harmonic lapse CCZ4c
     const double c   = 1.0;
     // Param CCZ4fff, CCZ4mu
-    const double fff = 0;
+    const double fff = 0.1;
     const double mu  = 0.2;
     const double fa  = 1.0;
     const double faa = 1.0;
@@ -486,10 +486,11 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
         dtA[k] -= sk*alpha*fa*temp;
     }
 
+    // Checked now, also for sk, fff !=0
     double dtB[3][3] = {
-        {fff*gradQin[20][0],fff*gradQin[20][1],fff*gradQin[20][2]},
-        {fff*gradQin[21][0],fff*gradQin[21][1],fff*gradQin[21][2]},
-        {fff*gradQin[22][0],fff*gradQin[22][1],fff*gradQin[22][2]}
+        {fff*gradQin[20][0],fff*gradQin[21][0],fff*gradQin[22][0]},
+        {fff*gradQin[20][1],fff*gradQin[21][1],fff*gradQin[22][1]},
+        {fff*gradQin[20][2],fff*gradQin[21][2],fff*gradQin[22][2]}
     };
 
 

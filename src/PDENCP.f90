@@ -18,7 +18,7 @@ subroutine PDENCP(BgradQ, Q, gradQin)
    REAL, intent(in) :: Q(nVar)
   TYPE, bind(C) :: tEquations
       REAL(8)    :: gamma, Pi, c0, g = 9.81, friction = 1.0     
-      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f=0.0, CCZ4g, CCZ4xi=0.0, CCZ4e=1, CCZ4c=1.0, CCZ4mu=0.2, CCZ4ds=1.0, CCZ4sk=0.1, CCZ4bs=0.0  
+      REAL(8)    :: CCZ4k1, CCZ4k2, CCZ4k3, CCZ4eta, CCZ4itau, CCZ4f=0.1, CCZ4g, CCZ4xi=0.1, CCZ4e=1, CCZ4c=1.0, CCZ4mu=0.2, CCZ4ds=1.0, CCZ4sk=0.1, CCZ4bs=0.1  
       REAL(8)    :: CCZ4GLMc0 = 0.5, CCZ4GLMc = 0.75, CCZ4GLMd = 0.75, CCZ4GLMepsD = 1e-2, CCZ4GLMepsA = 1e-2, CCZ4GLMepsP = 1e-2, cs, alpha, beta, lambda, cv, rho0, p0, tau1, tau2, mu, kappa ,tau 
       INTEGER :: CCZ4LapseType=0, EinsteinAutoAux = 0, ReferenceDepth = 1.0    
       REAL(8)    :: DivCleaning_a = 1.0 
