@@ -514,13 +514,12 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++) dtD[i][j][k] = -alpha*dAex[i][j][k];
     
-    
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++)
     for (int m = 0; m < 3; m++)
     {
-        dtD[k][i][j] += ( 0.125*(g_cov[m][i]*(dBB[k][j][m] + dBB[j][k][m]) + g_cov[m][j]*(dBB[k][i][m]+dBB[i][k][m])) - 1./6.*g_cov[i][j]*(dBB[k][m][m]+dBB[m][k][m]) );
+        dtD[k][i][j] += ( 0.25*(g_cov[m][i]*(dBB[k][j][m] + dBB[j][k][m]) + g_cov[m][j]*(dBB[k][i][m]+dBB[i][k][m])) - 1./6.*g_cov[i][j]*(dBB[k][m][m]+dBB[m][k][m]) );
         for (int n = 0; n < 3; n++)
             dtD[k][i][j] += 1./3*alpha*g_cov[i][j]*g_contr[n][m]*dAex[k][n][m]; // explicitly remove the trace of tilde A again  
     }
@@ -528,8 +527,10 @@ void pdencp_(double* BgradQ, const double* const Q, const double* const gradQSer
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int k = 0; k < 3; k++) dtD[i][j][k] += beta[0]*dDD[0][i][j][k] + beta[1]*dDD[1][i][j][k] + beta[2]*dDD[2][i][j][k];
-    
-    //for (int i = 0; i < 3; i++)
+   
+    // Checked!
+
+/*    for (int i = 0; i < 3; i++)*/
     //for (int j = 0; j < 3; j++)
     //for (int k = 0; k < 3; k++) 
     //{

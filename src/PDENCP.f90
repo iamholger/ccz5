@@ -586,7 +586,8 @@ subroutine PDENCP(BgradQ, Q, gradQin)
       DO j = 1, 3
        DO k = 1, 3 
         DO m = 1, 3
-            dtD(k,i,j) = dtD(k,i,j) + ( 0.5*(g_cov(m,i)*0.5*(dBB(k,j,m)+dBB(j,k,m))+g_cov(m,j)*0.5*(dBB(k,i,m)+dBB(i,k,m)) ) - 1./3.*g_cov(i,j)*0.5*(dBB(k,m,m)+dBB(m,k,m)) ) 
+            !dtD(k,i,j) = dtD(k,i,j) + ( 0.5*(g_cov(m,i)*0.5*(dBB(k,j,m)+dBB(j,k,m))+g_cov(m,j)*0.5*(dBB(k,i,m)+dBB(i,k,m)) ) - 1./3.*g_cov(i,j)*0.5*(dBB(k,m,m)+dBB(m,k,m)) ) 
+            dtD(k,i,j) = dtD(k,i,j) + 0.25*( g_cov(m,i)*(dBB(k,j,m)+dBB(j,k,m)) + g_cov(m,j)*(dBB(k,i,m)+dBB(i,k,m)) ) - 1./6.*g_cov(i,j)*(dBB(k,m,m)+dBB(m,k,m)) 
             DO n = 1, 3
                 dtD(k,i,j) = dtD(k,i,j) + 1./3*alpha*g_cov(i,j)*g_contr(n,m)*dAex(k,n,m)     ! explicitly remove the trace of tilde A again 
             ENDDO 
@@ -594,7 +595,16 @@ subroutine PDENCP(BgradQ, Q, gradQin)
        ENDDO
       ENDDO
     ENDDO 
+
+
     dtD = dtD + beta(1)*dDD(1,:,:,:) + beta(2)*dDD(2,:,:,:) + beta(3)*dDD(3,:,:,:)
+    !DO i = 1, 3
+      !DO j = 1, 3
+       !DO k = 1, 3 
+       !print*,i,j,k,dtD(i,j,k)
+       !enddo
+       !enddo
+       !enddo
     !
     dtP = + beta(1)*dPP(1,:) + beta(2)*dPP(2,:) + beta(3)*dPP(3,:)    
     DO k = 1, 3 
