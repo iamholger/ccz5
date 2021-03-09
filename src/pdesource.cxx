@@ -1,7 +1,8 @@
 #include <cmath>
 #include <iostream>
+#include "Constants.h"
 
-
+using namespace examples::exahype2::ccz4;
 
 #pragma omp declare target
 void pdesource_(double* S, const double* const Q)
@@ -13,28 +14,9 @@ void pdesource_(double* S, const double* const Q)
 #endif
     constexpr int nVar(59), nParam(0), d(3);
 
-    // First model parameter ds here (ds == CCZ4ds)
-    const double ds = 1.0; // NOTE this param seems to always be 1
-    // Second model parameter CCZ4e
-    const double e = 1.0; 
-    const double e2 = e*e;
-    // Parameter CCZ4sk here
-    // TODO test for values that from 0 to check logic
-    const double sk=0.1;
-    const double k1=0.1;
-    const double k2=0.1;
-    const double k3=0.1;
     // Input and output variables
-    // Params CCZ4xi, CCZ4bs
-    const double xi=0.1;
-    const double bs=0.1;
     // CCZ4 parameeter -- harmonic lapse CCZ4c
-    const double c   = 1.0;
-    const double eta = 1.0;
     // Param CCZ4fff, CCZ4mu
-    const double fff = 0.1;
-    const double mu  = 0.2;
-    const double itau =1.0; // CCZ4itau 
     const double fa  = 1.0;
     const double faa = 0.0;
 
@@ -115,7 +97,7 @@ void pdesource_(double* S, const double* const Q)
 
     double Z[3] = {0}; // Matrix vector multiplications
     for (int i=0;i<3;i++)
-    for (int j=0;j<3;j++) Z[i] += 0.5*ds*( g_cov[i][j]* (Ghat[j] - Gtilde[j]));
+    for (int j=0;j<3;j++) Z[i] += 0.5*CCZ4ds*( g_cov[i][j]* (Ghat[j] - Gtilde[j]));
     double Zup[3] = {0};
     for (int i=0;i<3;i++)
     for (int j=0;j<3;j++) Zup[i] += phi2 * g_contr[i][j] * Z[j];
@@ -162,7 +144,7 @@ void pdesource_(double* S, const double* const Q)
     double dZSrc[3][3] = {0};
     for (int j = 0; j < 3; j++)
     for (int i = 0; i < 3; i++)
-    for (int k = 0; k < 3; k++) dZSrc[k][i] += ds*(DD[k][i][j]*(Ghat[j]-Gtilde[j]) - 0.5*g_cov[i][j]*dGtildeSrc[k][j]);
+    for (int k = 0; k < 3; k++) dZSrc[k][i] += CCZ4ds*(DD[k][i][j]*(Ghat[j]-Gtilde[j]) - 0.5*g_cov[i][j]*dGtildeSrc[k][j]);
     
     double nablaZSrc[3][3] = {0};
     for (int j = 0; j < 3; j++)
@@ -213,7 +195,7 @@ void pdesource_(double* S, const double* const Q)
        
     double dtgamma[3][3];
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) dtgamma[i][j] = -2.0 * alpha * Aex[i][j] - itau*(det -1.0)*g_cov[i][j];
+    for (int j = 0; j < 3; j++) dtgamma[i][j] = -2.0 * alpha * Aex[i][j] - CCZ4itau*(det -1.0)*g_cov[i][j];
 
     const double BB[3][3] = {
         {Q[26], Q[27], Q[28]}, {Q[29], Q[30], Q[31]}, {Q[32], Q[33], Q[34]}
@@ -238,7 +220,7 @@ void pdesource_(double* S, const double* const Q)
     //! Main variables of the CCZ4 system 
     double dtK[3][3];
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) dtK[i][j] = phi2*SecondOrderTermsSrc[i][j] + alpha*Aex[i][j]*(traceK-2.*Theta) - 2.*alpha*Atemp[i][j] - itau*g_cov[i][j]*traceA;
+    for (int j = 0; j < 3; j++) dtK[i][j] = phi2*SecondOrderTermsSrc[i][j] + alpha*Aex[i][j]*(traceK-2.*Theta) - 2.*alpha*Atemp[i][j] - CCZ4itau*g_cov[i][j]*traceA;
     
     for (int j = 0; j < 3; j++) 
     for (int i = 0; i < 3; i++)
@@ -246,9 +228,9 @@ void pdesource_(double* S, const double* const Q)
    
     const double K0 = Q[58];
     
-    double dtTraceK = -nablanablaalphaSrc + alpha*(RPlusTwoNablaZSrc + traceK*traceK - 2.0*c*Theta*traceK) -3.0*alpha*k1*(1.+k2)*Theta;
+    double dtTraceK = -nablanablaalphaSrc + alpha*(RPlusTwoNablaZSrc + traceK*traceK - 2.0*CCZ4c*Theta*traceK) -3.0*alpha*CCZ4k1*(1.+CCZ4k2)*Theta;
     double dtphi = beta[0]*PP[0] + beta[1]*PP[1] + beta[2]*PP[2] + 1./3.*(alpha*traceK-traceB);
-    double dtalpha = -alpha*fa*(traceK-K0-2.*c*Theta)+beta[0]*AA[0]+beta[1]*AA[1]+beta[2]*AA[2];
+    double dtalpha = -alpha*fa*(traceK-K0-2.*CCZ4c*Theta)+beta[0]*AA[0]+beta[1]*AA[1]+beta[2]*AA[2];
 
 
     double Aupdown = 0;
@@ -258,7 +240,7 @@ void pdesource_(double* S, const double* const Q)
   
     double sumzupaa = 0.0;
     for (int i = 0; i < 3; i++) sumzupaa += Zup[i]*AA[i];
-    const double dtTheta = 0.5*alpha*e2*(RPlusTwoNablaZSrc - Aupdown + 2./3.*traceK*traceK) - alpha*(c*Theta*traceK + sumzupaa + k1*(2.+k2)*Theta);  // Baojiu
+    const double dtTheta = 0.5*alpha*CCZ4e*CCZ4e*(RPlusTwoNablaZSrc - Aupdown + 2./3.*traceK*traceK) - alpha*(CCZ4c*Theta*traceK + sumzupaa + CCZ4k1*(2.+CCZ4k2)*Theta);  // Baojiu
 
 
     double dtGhat[3];
@@ -274,10 +256,10 @@ void pdesource_(double* S, const double* const Q)
           temp5 += Gtilde[m]*BB[m][i];
           for (int n = 0; n < 3; n++) temp6  += Christoffel_tilde[m][n][i]*Aup[m][n];
         }
-        dtGhat[i] += 2.*alpha*(temp6 - 3.*temp1 + temp2 - temp3 - k1*temp4) - temp5 + 2./3.*Gtilde[i]*traceB;
+        dtGhat[i] += 2.*alpha*(temp6 - 3.*temp1 + temp2 - temp3 - CCZ4k1*temp4) - temp5 + 2./3.*Gtilde[i]*traceB;
 
         for (int l = 0; l < 3; l++)
-        for (int k = 0; k < 3; k++) dtGhat[i] += 2.*k3*(2./3.*g_contr[i][l]*Z[l]*BB[k][k] - g_contr[l][k]*Z[l]*BB[k][i]);
+        for (int k = 0; k < 3; k++) dtGhat[i] += 2.*CCZ4k3*(2./3.*g_contr[i][l]*Z[l]*BB[k][k] - g_contr[l][k]*Z[l]*BB[k][i]);
     }
 
     double ov[3];
@@ -291,24 +273,24 @@ void pdesource_(double* S, const double* const Q)
 
     // matrix vector multiplication in a loop and add result to existing vector
     for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++) dtGhat[i] += sk*g_contr[i][j]*ov[j];
+    for (int j = 0; j < 3; j++) dtGhat[i] += CCZ4sk*g_contr[i][j]*ov[j];
     
     const double myb[3] = {Q[20], Q[21], Q[22]};
     
     double dtbb[3];
-    for (int i = 0; i < 3; i++) dtbb[i] = sk*(xi*dtGhat[i] - eta*myb[i]);
+    for (int i = 0; i < 3; i++) dtbb[i] = CCZ4sk*(CCZ4xi*dtGhat[i] - CCZ4eta*myb[i]);
 
     double dtbeta[3];
-    for (int i = 0; i < 3; i++) dtbeta[i] = fff*myb[i];
-    for (int i = 0; i < 3; i++) dtbeta[i] += bs*(beta[0]*BB[0][i] + beta[1]*BB[1][i] + beta[2]*BB[2][i]);
-    for (int i = 0; i < 3; i++) dtbeta[i] *= sk;
+    for (int i = 0; i < 3; i++) dtbeta[i] = CCZ4f*myb[i];
+    for (int i = 0; i < 3; i++) dtbeta[i] += CCZ4bs*(beta[0]*BB[0][i] + beta[1]*BB[1][i] + beta[2]*BB[2][i]);
+    for (int i = 0; i < 3; i++) dtbeta[i] *= CCZ4sk;
 
 
     // Auxiliary variables 
     double dtA[3];
     for (int i = 0; i < 3; i++)
     {
-      dtA[i] = -alpha*AA[i]*(fa+alpha*faa)*(traceK - K0 - 2.*c*Theta);
+      dtA[i] = -alpha*AA[i]*(fa+alpha*faa)*(traceK - K0 - 2.*CCZ4c*Theta);
       for (int j = 0; j < 3; j++) dtA[i] += BB[i][j]*AA[j];
     }
 
@@ -317,13 +299,13 @@ void pdesource_(double* S, const double* const Q)
       double temp = 0;
       for (int i = 0; i < 3; i++)
       for (int j = 0; j < 3; j++) temp+= dgup[k][i][j]*Aex[i][j];
-      dtA[k] += -sk*alpha*fa*temp;
+      dtA[k] += -CCZ4sk*alpha*fa*temp;
     }
 
     double dtB[3][3] ={0};
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
-    for (int u = 0; u < 3; u++) dtB[i][j] += sk*(BB[i][u] * BB[u][j]);
+    for (int u = 0; u < 3; u++) dtB[i][j] += CCZ4sk*(BB[i][u] * BB[u][j]);
 
     double dtD[3][3][3];
     for (int m = 0; m < 3; m++)
@@ -349,7 +331,7 @@ void pdesource_(double* S, const double* const Q)
       double temp=0;
       for (int i = 0; i < 3; i++)
       for (int j = 0; j < 3; j++) temp += dgup[k][i][j]*Aex[i][j];
-      dtP[k] += 1./3.*alpha*(AA[k]*traceK + sk*temp);
+      dtP[k] += 1./3.*alpha*(AA[k]*traceK + CCZ4sk*temp);
     }
 
 
@@ -423,10 +405,12 @@ int main()
   Q[1]=3;
 
 //#pragma omp distribute parallel for
-  for (int i=0;i<1000000;i++)
+  //for (int i=0;i<10;i++)
     pdesource_(S,Q);
 
-  //for (int i=0;i<59;i++) printf("\t%d\t%.30f\n", i+1, S[i]);
+  //printf("%f\n", temppp);
+
+  for (int i=0;i<59;i++) printf("\t%d\t%.30f\n", i+1, S[i]);
   }
   return 0;
 }
