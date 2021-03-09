@@ -7,22 +7,18 @@ using namespace examples::exahype2::ccz4;
 #pragma omp declare target
 void pdesource_(double* S, const double* const Q)
 {
-#if defined(Dim3)
-    constexpr int nDim = 3;
-#elif defined(Dim2)
-    constexpr int nDim = 2;
-#endif
-    constexpr int nVar(59), nParam(0), d(3);
-
-    // Input and output variables
-    // CCZ4 parameeter -- harmonic lapse CCZ4c
-    // Param CCZ4fff, CCZ4mu
-    const double fa  = 1.0;
-    const double faa = 0.0;
 
     // De-serialise input data and fill static array
     // FIXME the use of 2D arrays can be avoided: all terms not in the normal are 0
 
+    const double alpha = std::exp(std::fmax(-20., std::fmin(20.,Q[16])));
+    double fa  = 1.0;
+    double faa = 0.0;
+    if (CCZ4LapseType==1)
+    {
+      fa  =  2./alpha;
+      faa = -fa/alpha;
+    }
 
     // Note g_cov is symmetric
     const double g_cov[3][3] = { {Q[0], Q[1], Q[2]}, {Q[1], Q[3], Q[4]}, {Q[2], Q[4], Q[5]} };
@@ -34,7 +30,6 @@ void pdesource_(double* S, const double* const Q)
         {-( Q[1]*Q[5]-Q[4]*Q[2])*invdet,  ( Q[0]*Q[5]-Q[2]*Q[2])*invdet, -( Q[0]*Q[4]-Q[2]*Q[1])*invdet},
         {-(-Q[1]*Q[4]+Q[3]*Q[2])*invdet, -( Q[0]*Q[4]-Q[1]*Q[2])*invdet,  ( Q[0]*Q[3]-Q[1]*Q[1])*invdet}
     };
-
 
     // NOTE Aex is symmetric
     double Aex[3][3] = { {Q[6], Q[7], Q[8]}, {Q[7], Q[9], Q[10]}, {Q[8], Q[10], Q[11]} };
@@ -163,8 +158,6 @@ void pdesource_(double* S, const double* const Q)
     for (int j = 0; j < 3; j++) RPlusTwoNablaZSrc += g_contr[i][j]*RicciPlusNablaZSrc[i][j]; // TODO fuse these steps
     RPlusTwoNablaZSrc*=phi2;
 
-
-    const double alpha = std::exp(std::fmax(-20., std::fmin(20.,Q[16])));
 
     const double AA[3] = {Q[23], Q[24], Q[25]};
 
@@ -389,7 +382,7 @@ void pdesource_(double* S, const double* const Q)
 
 int main()
 {
-#pragma omp target teams
+#pragma omp target //teams
   {
   const int nVar(59);
   double Q[nVar], S[nVar];
