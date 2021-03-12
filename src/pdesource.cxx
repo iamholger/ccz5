@@ -4,13 +4,9 @@
 
 using namespace examples::exahype2::ccz4;
 
-#pragma omp declare target
-void pdesource_(double* S, const double* const Q)
+//#pragma omp declare target
+void mypdesource_(double* S, const double* const Q)
 {
-
-    // De-serialise input data and fill static array
-    // FIXME the use of 2D arrays can be avoided: all terms not in the normal are 0
-
     const double alpha = std::exp(std::fmax(-20., std::fmin(20.,Q[16])));
     double fa  = 1.0;
     double faa = 0.0;
@@ -42,11 +38,11 @@ void pdesource_(double* S, const double* const Q)
     for (int j=0;j<3;j++) Aex[i][j] -= 1./3. * traceA * g_cov[i][j];
 
     // Matrix multiplications Amix = matmul(g_contr, Aex) Aup  = matmul(g_contr, transpose(Amix))
-    double Amix[3][3]={0};
+    double Amix[3][3]={0,0,0,0,0,0,0,0,0};
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int u = 0; u < 3; u++) Amix[i][j] += g_contr[i][u] * Aex[u][j];
-    double Aup[3][3]={0};
+    double Aup[3][3]={0,0,0,0,0,0,0,0,0};
     for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
     for (int u = 0; u < 3; u++) Aup[i][j] += g_contr[i][u] * Amix[j][u]; // Note the transposition is in the indices
@@ -59,7 +55,7 @@ void pdesource_(double* S, const double* const Q)
         {{Q[47], Q[48], Q[49]}, {Q[48], Q[50], Q[51]}, {Q[49], Q[51], Q[52]}}
     };
    
-    double dgup[3][3][3] {0};
+    double dgup[3][3][3] = {0};
     for (int k = 0; k < 3; k++)
     for (int m = 0; m < 3; m++)
     for (int l = 0; l < 3; l++) 
@@ -300,7 +296,7 @@ void pdesource_(double* S, const double* const Q)
     for (int j = 0; j < 3; j++)
     for (int u = 0; u < 3; u++) dtB[i][j] += CCZ4sk*(BB[i][u] * BB[u][j]);
 
-    double dtD[3][3][3];
+    double dtD[3][3][3] = {0};
     for (int m = 0; m < 3; m++)
     for (int j = 0; j < 3; j++)
     for (int i = 0; i < 3; i++)
@@ -378,15 +374,16 @@ void pdesource_(double* S, const double* const Q)
     for (int i = 0; i < 3; i++) S[55+i] = dtP[i];
     S[58] = 0;
 }
-#pragma omp end declare target
+//#pragma omp end declare target
 
-int main()
+int main(int argc, char* argv[])
 {
-#pragma omp target //teams
-  {
+//#pragma omp target //teams
+  //{
   const int nVar(59);
   double Q[nVar], S[nVar];
 
+  const double  Qtest[59] = {1.03876392436862219348e+00,1.13327632951146378931e-17,1.13328125850752231240e-17,9.81163922513405450943e-01,7.28991960382758263436e-20,9.81163922513405450943e-01,1.60702820377219834924e-01,-2.51854521837995827255e-14,-2.51859943549822510890e-14,-7.58958825491163335819e-02,-1.66695209611466999131e-16,-7.58958825491163335819e-02,5.73443499779581738335e-04,3.01713236980058585601e-01,-5.73062863551328161271e-12,-5.73061639353499262517e-12,2.85203957292370774423e-02,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,2.33452764998758000026e-01,-4.17807322717328905611e-12,-4.17806121758503744557e-12,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,0.00000000000000000000e+00,1.66029261165760388952e-01,3.52110122269561003271e-16,3.52110623323521089469e-16,-7.84114259822868420180e-02,-1.00892874234056400197e-18,-7.84114259822868420180e-02,-2.87874071850877923045e-12,-3.11299149429065573305e-16,4.67768108082361629111e-18,1.35940313205684060638e-12,-2.07569443609550208564e-18,1.35970991086859628736e-12,-2.87874063909529684826e-12,1.43318865709343599115e-18,-3.14548568405474184678e-16,1.35970993559255365097e-12,-2.04322863271445272127e-18,1.35940303232291987362e-12,2.34302828568053289615e-01,-9.50679857641236088217e-03,-7.99171325660463643947e-02,1.44427998332769005893e-12,1.44427998345849223420e-12,0.00000000000000000000e+00};
   // Set up initial test data
   for (int i=0;i<nVar;i++)
   {
@@ -398,12 +395,17 @@ int main()
   Q[1]=3;
 
 //#pragma omp distribute parallel for
-  //for (int i=0;i<10;i++)
-    pdesource_(S,Q);
+  for (int i=0;i<std::atoi(argv[1]);i++)
+  {
+    //pdesource_(S,Q);
+    printf("Before: %f\n", S[35] );
+    mypdesource_(S,Qtest);
+    printf("After: %f\n", S[35] );
+  }
 
   //printf("%f\n", temppp);
 
   for (int i=0;i<59;i++) printf("\t%d\t%.30f\n", i+1, S[i]);
-  }
+  //}
   return 0;
 }
