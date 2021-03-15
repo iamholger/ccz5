@@ -71,8 +71,8 @@ void enforce(double * luh)
     luh[35] = DD[0][0][0];
     luh[36] = DD[0][0][1];
     luh[37] = DD[0][0][2];
-    luh[38] = DD[0][2][1];
-    luh[39] = DD[0][2][2];
+    luh[38] = DD[0][1][1];
+    luh[39] = DD[0][1][2];
     luh[40] = DD[0][2][2];
     luh[41] = DD[1][0][0];
     luh[42] = DD[1][0][1];
@@ -102,7 +102,7 @@ int main()
   for (int i=0;i<59;i++) bla+=(Qwork[i]-Qtest[i]);
 
   for (int i=0;i<59;i++) printf("\t%d\t%.30f\n", i+1, Qwork[i]-Qtest[i]);
-  printf("%e\n", bla);
+  //printf("%e\n", bla);
   return 0;
 }
 
